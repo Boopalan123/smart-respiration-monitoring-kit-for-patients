@@ -1,0 +1,37 @@
+1)	Chest strap
+
+The elastic chest strap holds the piezoelectric sensor on the
+Lower chest region. Strong placement is important to eliminate motion artifacts and there is constant sensor to body pressure during breathing.
+
+2)	Circular Piezoelectric Sensor
+
+The circular piezoelectric sensor act as the primary respiration detector. During the inhales and exhales while respiration, chest expansion applies mechanical stress on the sensor results in generation of a small AC voltage. Especially circular geometry ensures uniform stress distribution and stable output signal suitable for wearable applications.
+
+3)	RC   Filter
+
+The filter circuit is designed with high pass and low pass      filter network. The high pass filter is designed with 1MΩ resistor and 1.59 µF capacitor and a low pass Sallen-Key network using two 56 kΩ resistors and two 0.1 µF capacitors to filter high-frequency noise. Together, these components limit the passband to the respiration range of 0.1 – 2.8 Hz, improving signal clarity and stable detection. It is easy to design and easy to use for smart breath monitoring device.
+
+4)	Piezo Buzzer
+
+The device has 3.3 V piezo buzzer to provide immediate audible alerts when abnormal breathing is detected. This ensures that the patient or caregiver receives instant local alert even without internet connectivity or access to the Blynk IoT.
+
+5)	LM358 Amplifier
+
+LM358 is a dual operational amplifier used to amplify the 
+weak millivolt signal from piezo electric sensor. It is designed as a non-inverting amplifier with a gain of 10.1 V using a 91KΩ feedback resistor and a 10 kΩ grounding resistor, it amplifies the signal within the ESP32 ADC range (0-3.3 V). Making it suitable for respiration signals (0.1–2 Hz).
+
+6)	Microcontroller
+
+The microcontroller used in this device is ESP32 microcontroller. The ESP32 microcontroller is used in this project for its high-speed calculation and having advanced features for IoT operations. It performs ADC sampling, signal processing, respiration rate calculation and IoT functionality. 
+
+
+  
+7)	Liquid Crystal Display
+
+The system uses 16x2 display to show real-time respiration rate, system state and alert notifications. It acts as a local display to the patient or caregiver without requiring access to a smartphone or IoT dashboard.
+
+8)	Blynk IoT Platform
+
+The Blynk IoT system provides real time alert through Wi-Fi, current respiration rate and patients respiration history.
+Once the ESP32 detects any critical breathing it immediately transmit alerts to the Blynk mobile app. This helps caregivers to monitor patients (infants, elderly, sleep-apnea patient’s) in real time from any location. Blynk also stores patient’s historical respiration data & supporting trend analysis.
+
