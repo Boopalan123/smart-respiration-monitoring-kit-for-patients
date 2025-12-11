@@ -1,0 +1,174 @@
+#define BLYNK_TEMPLATE_ID "TMPL3tAH9KE3A"
+#define BLYNK_TEMPLATE_NAME "respiration monitoring"
+#define BLYNK_AUTH_TOKEN "_91i3utFKtcYYjrOfchAus-wCZyEbRuK"
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char ssid[] = "Redmi 12 5G";
+char pass[] = "123456798";
+char auth[] = BLYNK_AUTH_TOKEN;
+
+const int adcPin = 35;
+const int ledPin = 2;
+const int buzzerPin = 26;
+const int SDA_PIN = 25;
+const int SCL_PIN = 33;
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const int N = 60;
+int buf[N];
+long sum = 0;
+int idx = 0;
+bool filled = false;
+
+float baseline = 0;
+float alpha = 0.01;
+
+int thresholdHigh = 2850;
+int thresholdLow  = 2500;
+int deviationOffset = 0;
+int manualValue = -1;
+
+unsigned long lastUpdate = 0;
+unsigned long lastLogTime = 0;
+const unsigned long displayInterval = 1000;
+const unsigned long logCooldown = 30000;
+
+// --- For Breath Detection ---
+int prevDeviation = 0;
+bool inhalePhase = false;
+unsigned long lastBreathTime = 0;
+int breathCount = 0;
+float breathsPerMinute = 15;
+
+// ---------------- BLYNK INPUT HANDLERS ----------------
+BLYNK_WRITE(V3) {
+  thresholdHigh = param.asInt();
+  Serial.print("Updated thresholdHigh: ");
+  Serial.println(thresholdHigh);
+}
+
+BLYNK_WRITE(V4) {
+  thresholdLow = param.asInt();
+  Serial.print("Updated thresholdLow: ");
+  Serial.println(thresholdLow);
+}
+
+BLYNK_WRITE(V5) {
+  deviationOffset = param.asInt();
+  Serial.print("Updated deviation offset: ");
+  Serial.println(deviationOffset);
+}
+
+BLYNK_WRITE(V1) {
+  manualValue = param.asInt();
+  Serial.print("Manual ADC value from app: ");
+  Serial.println(manualValue);
+}
+
+void setup() {
+  Serial.begin(115200);
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  pinMode(ledPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
+
+  Wire.begin(SDA_PIN, SCL_PIN);
+  lcd.init();
+  lcd.backlight();
+  lcd.print("Resp Monitor...");
+  delay(1000);
+  lcd.clear();
+
+  Blynk.begin(auth, ssid, pass);
+  Serial.println("Resp monitor start");
+}
+
+void loop() {
+  Blynk.run();
+
+  int raw = analogRead(adcPin);
+
+  // Moving average smoothing
+  sum -= buf[idx];
+  buf[idx] = raw;
+  sum += buf[idx];
+  idx = (idx + 1) % N;
+  if (idx == 0) filled = true;
+
+  int avg = filled ? sum / N : raw;
+  if (manualValue >= 0) avg = manualValue;
+
+  baseline = (1 - alpha) * baseline + alpha * avg;
+  int deviation = avg - baseline + deviationOffset;
+
+  // --- Breath detection logic ---
+  if (deviation > 40 && !inhalePhase) {  // start inhale
+    inhalePhase = true;
+  }
+  if (deviation < -40 && inhalePhase) {  // exhale completed
+    inhalePhase = false;
+    unsigned long now = millis();
+    if (lastBreathTime != 0) {
+      float breathDuration = (now - lastBreathTime) / 1000.0; // in sec
+      breathsPerMinute = 60.0 / breathDuration;
+    }
+    lastBreathTime = now;
+    breathCount++;
+  }
+
+  Blynk.virtualWrite(V6, deviation);
+  Blynk.virtualWrite(V7, breathsPerMinute);
+
+  if (millis() - lastUpdate > displayInterval) {
+    lastUpdate = millis();
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+
+    if (avg <= thresholdHigh && avg >= thresholdLow) {
+      digitalWrite(ledPin, HIGH);
+      digitalWrite(buzzerPin, HIGH);
+
+      lcd.print("Resp ALERT !!!");
+      lcd.setCursor(0, 1);
+      lcd.print("Val: ");
+      lcd.print(avg);
+
+      Blynk.virtualWrite(V0, "ALERT");
+      Blynk.virtualWrite(V2, 255);
+
+      if (millis() - lastLogTime > logCooldown) {
+        Blynk.logEvent("respiration_monitoring", String("Abnormal respiration: ") + avg);
+        lastLogTime = millis();
+      }
+    } else {
+      digitalWrite(ledPin, LOW);
+      digitalWrite(buzzerPin, LOW);
+      lcd.print("Val: ");
+      lcd.print(avg);
+      lcd.print("BPM:");
+      lcd.print(breathsPerMinute, 1);
+      lcd.print(" Dev:");
+      lcd.print((int)deviation);
+
+      lcd.setCursor(0, 1);
+      if (inhalePhase)
+        lcd.print("Inhale ");
+      else
+        lcd.print("Exhale ");
+    }
+
+    Serial.print("Avg: "); Serial.print(avg);
+    Serial.print(" | Dev: "); Serial.print(deviation);
+    Serial.print(" | BPM: "); Serial.println(breathsPerMinute);
+  }
+
+  delay(200);
+}
